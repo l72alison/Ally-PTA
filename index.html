@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="zh-TW">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>我的旅遊手冊 | 旅程公版</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&family=Oswald:wght@500;700&display=swap");
+
+      /* 動態主題顏色變數 */
+      :root {
+        --primary: #ea9999; /* 預設顏色 */
+        --primary-content: #1a1a1a; /* 預設按鈕文字色 */
+        --primary-border: #ea9999;
+      }
+
+      body {
+        background-color: #e2e2e2;
+        font-family: "Noto Sans TC", sans-serif;
+        color: #1a1a1a;
+      }
+      .font-eng { font-family: "Oswald", sans-serif; }
+      
+      .hide-scrollbar::-webkit-scrollbar { display: none; }
+      .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+      /* ================= 全域主題自訂 Class ================= */
+      .text-primary { color: var(--primary) !important; }
+      .bg-primary { background-color: var(--primary) !important; }
+      .border-primary { border-color: var(--primary-border) !important; }
+      .focus-primary:focus { border-color: var(--primary) !important; }
+      .accent-primary { accent-color: var(--primary) !important; }
+      .text-primary-content { color: var(--primary-content) !important; }
+
+      /* ================= 分頁與導覽列邏輯 ================= */
+      
+      /* 每日行程 Tab */
+      .day-btn.active {
+        background-color: var(--primary);
+        color: var(--primary-content);
+      }
+      .day-btn:not(.active) {
+        background-color: #e2e2e2;
+        color: #1a1a1a;
+      }
+      .day-btn:not(.active):hover {
+        background-color: #d1d5db;
+      }
+      .day-btn.active .day-label { opacity: 0.8; }
+      .day-btn:not(.active) .day-label { opacity: 0.6; }
+      .day-btn.active .date-label { opacity: 0.9; }
+      .day-btn:not(.active) .date-label { opacity: 0.6; }
+
+      /* 底部導覽列 Tab */
+      .nav-btn.active { color: var(--primary); }
+      .nav-btn:not(.active) { color: #6b7280; }
+      .nav-btn:not(.active):hover { color: #111827; }
+
+      /* 主內容顯示控制 */
+      .day-content, .main-tab { display: none; opacity: 0; }
+      .day-content.active, .main-tab.active { display: block; animation: fade-in 0.4s forwards; }
+
+      @keyframes fade-in {
+        from { opacity: 0; transform: translateY(5px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
+      .app-container {
+        max-width: 480px;
+        margin: 0 auto;
+        background-color: #e2e2e2;
+        min-height: 100vh;
+        border-left: 1px solid #d1d1d1;
+        border-right: 1px solid #d1d1d1;
+        position: relative;
+        padding-bottom: 80px;
+      }
+
+      /* Modal 樣式 */
+      .modal-overlay {
+        position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+        background: rgba(0,0,0,0.5);
+        display: none; justify-content: center; align-items: center;
+        z-index: 100; padding: 20px;
+      }
+      .modal-overlay.active { display: flex; }
+      .modal-container {
+        background: #e2e2e2; width: 100%; max-width: 400px;
+        border-radius: 16px; padding: 24px;
+        animation: slide-up 0.3s forwards; border: 1px solid #d1d1d1;
+      }
+      @keyframes slide-up {
+        from { opacity: 0; transform: translateY(20px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+      #tab-container { scroll-behavior: smooth; -webkit-overflow-scrolling: touch; }
+    </style>
+  </head>
+  <body>
+    <div class="app-container">
+      
+      <!-- 頂部標題區 -->
+      <header class="pt-6 pb-4 px-6 flex justify-between items-center bg-[#e2e2e2] shadow-sm sticky top-0 z-40 rounded-b-3xl border-b border-gray-300">
+        <div class="flex items-center gap-3">
+          <div id="header-icon" class="w-10 h-10 bg-primary text-primary-content flex items-center justify-center font-bold text-lg rounded-lg font-eng uppercase transition-colors duration-300">
+            TRIP
+          </div>
+          <div>
+            <h2 id="header-title" class="text-sm tracking-widest font-bold text-gray-800">新旅程</h2>
+            <p id="header-dates" class="text-[11px] font-medium text-gray-500 tracking-wider">--</p>
+          </div>
+        </div>
+        <!-- 設定按鈕 -->
+        <button onclick="openSettingsModal()" class="w-8 h-8 rounded-full bg-gray-300 text-gray-700 flex items-center justify-center hover:bg-gray-400 transition-colors">
+          ⚙️
+        </button>
+      </header>
+
+      <!-- ================= 1. 行程分頁 (Itinerary) ================= -->
+      <div id="tab-itinerary" class="main-tab active">
+        <!-- 動態網格日期選擇器 -->
+        <div class="flex overflow-x-auto hide-scrollbar border-b border-gray-300 bg-[#e2e2e2]" id="tab-container">
+          <!-- 由 JS 動態生成 -->
+        </div>
+
+        <!-- 摘要區塊 (套用主色) -->
+        <div class="bg-primary text-primary-content p-6 relative overflow-hidden shadow-sm transition-colors duration-300">
+          <p id="summary-title" class="font-eng text-xs font-bold tracking-widest mb-2 opacity-90">DAY -- / --</p>
+          <h2 class="text-2xl font-bold leading-snug mb-2 tracking-wide">行程表</h2>
+          <p class="text-xs opacity-80">點擊右下角新增今日行程。</p>
+          <div id="summary-num" class="absolute -bottom-6 -right-2 font-eng font-bold text-[100px] leading-none opacity-10">01</div>
+        </div>
+
+        <!-- 動態行程列表 -->
+        <main class="py-8 relative min-h-[300px]">
+          <div class="absolute left-[70px] top-10 bottom-10 w-[1px] bg-gray-400 z-0"></div>
+          <div id="itinerary-main-content">
+            <!-- 由 JS 動態生成不同天數的容器 -->
+          </div>
+        </main>
+
+        <!-- 浮動新增按鈕 -->
+        <button onclick="openItineraryModal()" class="fixed bottom-[100px] right-[calc(50%-220px)] w-14 h-14 bg-gray-900 text-white rounded-full flex items-center justify-center shadow-lg hover:bg-gray-800 transition-transform active:scale-95 z-40 border-4 border-gray-300">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4" /></svg>
+        </button>
+      </div>
+
+      <!-- ================= 2. 記帳分頁 (Expenses) ================= -->
+      <div id="tab-expenses" class="main-tab px-6 py-6">
+        <h1 class="text-2xl font-bold tracking-widest mb-6 font-eng flex items-center gap-2">
+          <span class="text-primary">🧾</span> EXPENSES
+        </h1>
+        
+        <!-- 總花費卡片 -->
+        <div class="bg-[#0f172a] text-white rounded-2xl p-6 mb-8 shadow-md relative overflow-hidden">
+          <p class="text-xs font-bold tracking-widest text-primary mb-2 font-eng transition-colors duration-300">TOTAL SPENT</p>
+          <div class="flex items-baseline gap-2">
+            <span class="text-2xl font-bold text-gray-400 cur-sym-label">$</span>
+            <span id="expense-total" class="text-5xl font-bold font-eng tracking-tight">0</span>
+          </div>
+          <div class="absolute -bottom-4 -right-2 text-6xl opacity-10">💸</div>
+        </div>
+
+        <!-- 支出紀錄列表 -->
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="font-bold text-gray-800">支出紀錄</h3>
+          <button onclick="openModal('modal-add-expense')" class="text-primary font-bold text-sm border border-primary px-3 py-1.5 rounded-full hover:bg-gray-300 flex items-center gap-1 transition-colors">
+            <span>+</span> 新增
+          </button>
+        </div>
+
+        <div id="expense-list" class="space-y-3">
+          <!-- 支出列表內容 -->
+        </div>
+      </div>
+
+      <!-- ================= 3. 匯率分頁 (Exchange) ================= -->
+      <div id="tab-exchange" class="main-tab px-6 py-6">
+        <h1 class="text-2xl font-bold tracking-widest mb-6 font-eng flex items-center gap-2">
+          <span class="text-primary">⇄</span> EXCHANGE
+        </h1>
+
+        <div class="bg-[#e2e2e2] border-2 border-primary rounded-2xl p-6 shadow-sm relative transition-colors duration-300">
+          <div class="flex justify-between items-start mb-6">
+            <div>
+              <h3 class="font-bold text-gray-800 text-lg">即時匯率換算</h3>
+              <p class="text-xs text-gray-500 mt-1">公版預設匯率，可手動微調</p>
+            </div>
+            <div class="bg-white border border-gray-300 px-2.5 py-1.5 rounded-md text-xs font-eng text-gray-700 flex items-center gap-1 shadow-sm">
+              Rate: 1 <span class="cur-code-label">CUR</span> = <input type="number" id="exchange-rate" step="0.001" class="w-14 bg-transparent border-b border-gray-400 text-center px-1 text-gray-800 font-bold outline-none focus-primary" /> TWD
+            </div>
+          </div>
+
+          <div class="mb-4">
+            <label class="block text-xs font-bold text-gray-600 mb-2">當地貨幣 (<span class="cur-code-label">CUR</span> <span class="cur-sym-label">$</span>)</label>
+            <div class="flex items-center border-2 border-gray-900 rounded-lg overflow-hidden shadow-sm bg-white">
+              <div class="bg-gray-900 text-white w-14 h-12 flex items-center justify-center font-eng font-bold text-xl cur-sym-label">$</div>
+              <input type="number" id="input-foreign" placeholder="0" class="flex-1 h-12 bg-transparent px-4 font-eng text-xl font-bold outline-none text-gray-800" />
+            </div>
+          </div>
+
+          <div class="flex justify-center my-4">
+            <div class="w-8 h-8 bg-primary text-primary-content rounded-full flex items-center justify-center shadow-md font-bold transition-colors duration-300">↓</div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-bold text-gray-600 mb-2">台幣 (TWD NT$)</label>
+            <div class="flex items-center border-2 border-gray-900 rounded-lg overflow-hidden shadow-sm bg-white">
+              <div class="bg-gray-900 text-white w-14 h-12 flex items-center justify-center font-eng font-bold text-sm">NT$</div>
+              <input type="number" id="input-twd" placeholder="0" class="flex-1 h-12 bg-transparent px-4 font-eng text-xl font-bold outline-none text-gray-800" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ================= 底部導覽列 ================= -->
+      <nav class="fixed bottom-0 w-full max-w-[480px] bg-[#e2e2e2] border-t border-gray-300 flex justify-around items-center h-[70px] z-50 pb-2">
+        <button class="nav-btn active flex flex-col items-center gap-1 transition-colors" data-target="tab-itinerary">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z" /><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" /></svg>
+          <span class="text-[10px] font-bold">行程</span>
+        </button>
+        <button class="nav-btn flex flex-col items-center gap-1 transition-colors" data-target="tab-expenses">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z" /></svg>
+          <span class="text-[10px] font-bold">記帳</span>
+        </button>
+        <button class="nav-btn flex flex-col items-center gap-1 transition-colors" data-target="tab-exchange">
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7h12m0 0l-4-4m4 4l-4 4m0 6H4m0 0l4 4m-4-4l4-4" /></svg>
+          <span class="text-[10px] font-bold">匯率</span>
+        </button>
+      </nav>
+
+    </div>
+
+    <!-- ================= Modals ================= -->
+    
+    <!-- 1. 旅程初始設定 Modal -->
+    <div id="modal-settings" class="modal-overlay">
+      <div class="modal-container">
+        <h3 class="text-lg font-bold mb-4 flex items-center gap-2">🧳 旅程初始設定</h3>
+        <div class="space-y-4 max-h-[75vh] overflow-y-auto hide-scrollbar pb-2">
+          
+          <!-- 獨立旅程代碼 (多人連線核心) -->
+          <div class="bg-gray-300 p-3 rounded-xl border border-gray-400">
+            <label class="block text-xs font-bold text-gray-700 mb-1 flex justify-between items-end">
+              <span>🔗 旅程代碼 (Trip ID)</span>
+              <span class="text-[10px] text-gray-500 font-normal">可手動修改，與朋友同步</span>
+            </label>
+            <input type="text" id="set-trip-id" class="w-full bg-white rounded-lg p-2 outline-none focus-primary font-eng tracking-widest text-center uppercase font-bold text-primary" placeholder="例如：A1B2C">
+          </div>
+
+          <!-- 主題顏色選擇器 -->
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-2">主題顏色</label>
+            <div class="flex gap-2 flex-wrap" id="color-picker-container">
+              <!-- JS 動態生成調色盤 -->
+            </div>
+          </div>
+
+          <hr class="border-gray-400">
+
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">旅行名稱</label>
+            <input type="text" id="set-title" placeholder="請輸入旅行名稱" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">目的地 (中英文國家/城市)</label>
+            <input type="text" id="set-dest" placeholder="例如：曼谷、日本、Busan" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="block text-xs font-bold text-gray-700 mb-1">開始日期</label>
+              <input type="date" id="set-start" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+            </div>
+            <div class="flex-1">
+              <label class="block text-xs font-bold text-gray-700 mb-1">結束日期</label>
+              <input type="date" id="set-end" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+            </div>
+          </div>
+          <div class="flex gap-2">
+            <div class="flex-1">
+              <label class="block text-xs font-bold text-gray-500 mb-1">當地幣別 (自動)</label>
+              <input type="text" id="set-cur-code" readonly class="w-full border border-gray-300 bg-gray-300 text-gray-600 rounded-lg p-2 outline-none font-bold">
+            </div>
+            <div class="flex-1">
+              <label class="block text-xs font-bold text-gray-500 mb-1">貨幣符號 (自動)</label>
+              <input type="text" id="set-cur-sym" readonly class="w-full border border-gray-300 bg-gray-300 text-gray-600 rounded-lg p-2 outline-none font-bold">
+            </div>
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">預設匯率 (1 <span id="rate-label-currency" class="text-primary">當地貨幣</span> = ? 台幣)</label>
+            <input type="number" id="set-rate" step="0.001" placeholder="例如：0.95" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">同行人名單 (請用半形逗號分隔)</label>
+            <input type="text" id="set-people" placeholder="例如：A,B" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div class="flex gap-2 mt-4">
+            <button onclick="closeModal('modal-settings')" class="w-1/3 bg-gray-400 text-white font-bold rounded-lg py-3 hover:bg-gray-500 transition-colors border border-gray-400">取消</button>
+            <button onclick="saveSettings()" class="w-2/3 bg-primary text-primary-content font-bold rounded-lg py-3 hover:opacity-90 transition-colors border border-primary">儲存設定</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. 新增/編輯行程 Modal -->
+    <div id="modal-add-itinerary" class="modal-overlay">
+      <div class="modal-container">
+        <div class="flex justify-between items-center mb-4">
+          <h3 id="modal-itinerary-title" class="text-lg font-bold">新增行程</h3>
+          <button onclick="closeModal('modal-add-itinerary')" class="text-gray-500 hover:text-gray-900 font-bold">✕</button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">時間</label>
+            <input type="time" id="itinerary-time" step="300" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary" value="10:00">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">行程標題</label>
+            <input type="text" id="itinerary-title" placeholder="例如：購物" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">備註 (選填)</label>
+            <input type="text" id="itinerary-desc" placeholder="例如：記得帶購物袋" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">注意事項 (選填)</label>
+            <input type="text" id="itinerary-warning" placeholder="例如：請留意隨身物品" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <button onclick="submitItinerary()" class="w-full bg-primary text-primary-content font-bold rounded-lg py-3 mt-2 hover:opacity-90 transition-colors border border-primary">儲存行程</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 新增記帳 Modal -->
+    <div id="modal-add-expense" class="modal-overlay">
+      <div class="modal-container">
+        <div class="flex justify-between items-center mb-4">
+          <h3 class="text-lg font-bold">新增支出</h3>
+          <button onclick="closeModal('modal-add-expense')" class="text-gray-500 hover:text-gray-900 font-bold">✕</button>
+        </div>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">項目名稱</label>
+            <input type="text" id="expense-title" placeholder="例如：晚餐" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">金額 (<span class="cur-code-label">CUR</span>)</label>
+            <input type="number" id="expense-amount" placeholder="0" class="w-full border border-gray-400 bg-[#e2e2e2] rounded-lg p-2 outline-none focus-primary font-eng">
+          </div>
+          <div>
+            <label class="block text-xs font-bold text-gray-700 mb-1">這是誰的花費？</label>
+            <div id="expense-payers-container" class="flex gap-2 flex-wrap">
+              <!-- JS 動態生成同行者選項 -->
+            </div>
+          </div>
+          <button onclick="submitExpense()" class="w-full bg-[#0f172a] text-white font-bold rounded-lg py-3 mt-2 hover:bg-gray-800 transition-colors">新增紀錄</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ================= JavaScript 與 Firebase 邏輯 ================= -->
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+      import { getFirestore, collection, doc, setDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+      // Firebase 配置
+      const firebaseConfig = {
+        apiKey: "AIzaSyCt4w10N7VORQPvPoQeRw9N4873CZtH37I",
+        authDomain: "ally-s-pta.firebaseapp.com",
+        projectId: "ally-s-pta",
+        storageBucket: "ally-s-pta.firebasestorage.app",
+        messagingSenderId: "793827706254",
+        appId: "1:793827706254:web:381203c86afd3a126410df",
+        measurementId: "G-WBL6ZBP6GS"
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const db = getFirestore(app);
+
+      // 全域變數
+      let currentDay = 'day1';
+      let editingItineraryId = null;
+      let tripDays = []; 
+      let itinerariesData = {};
+      let expensesData = [];
+      let totalSpent = 0;
+      
+      let unsubscribeItineraries = null;
+      let unsubscribeExpenses = null;
+
+      let tripSettings = JSON.parse(localStorage.getItem('tripSettings')) || null;
+
+      // 產生隨機 5 碼旅程代碼
+      function generateTripId() {
+        return Math.random().toString(36).substring(2, 7).toUpperCase();
+      }
+
+      // 指定的 10 組主題色系 (調整文字顏色以配合對比度)
+      const THEME_COLORS = [
+        { hex: '#ea9999', text: '#1a1a1a' },
+        { hex: '#f9cb9c', text: '#1a1a1a' },
+        { hex: '#ffe599', text: '#1a1a1a' },
+        { hex: '#b6d7a8', text: '#1a1a1a' },
+        { hex: '#a4c2f4', text: '#1a1a1a' },
+        { hex: '#9fc5e8', text: '#1a1a1a' },
+        { hex: '#b4a7d6', text: '#1a1a1a' },
+        { hex: '#000000', text: '#ffffff' },
+        { hex: '#ffffff', text: '#1a1a1a' },
+        { hex: '#e6b8af', text: '#1a1a1a' }
+      ];
+
+      function getDestinationInfo(dest) {
+        const d = dest.toLowerCase().trim();
+        if (!d) return { code: '', sym: '', rate: '', icon: 'TRIP' };
+        
+        const mapping = [
+            { keys: ['曼谷', '泰', 'bangkok', 'thailand', 'bkk'], code: 'THB', sym: '฿', rate: 0.95, icon: 'BKK' },
+            { keys: ['日', '東京', '大阪', 'japan', 'tokyo', 'osaka', 'jpy', 'jp'], code: 'JPY', sym: '¥', rate: 0.21, icon: 'JP' },
+            { keys: ['韓', '釜山', '首爾', 'korea', 'busan', 'seoul', 'krw', 'kr'], code: 'KRW', sym: '₩', rate: 0.024, icon: 'KR' },
+            { keys: ['美', '紐約', 'us', 'usa', 'america', 'usd'], code: 'USD', sym: '$', rate: 31.5, icon: 'US' },
+            { keys: ['歐', '法', '德', '義', 'eu', 'europe', 'paris', 'eur'], code: 'EUR', sym: '€', rate: 34.2, icon: 'EU' },
+            { keys: ['英', '倫敦', 'uk', 'london', 'gbp'], code: 'GBP', sym: '£', rate: 40.1, icon: 'UK' },
+            { keys: ['台', '台北', 'taiwan', 'taipei', 'tw', 'twd'], code: 'TWD', sym: 'NT$', rate: 1, icon: 'TW' },
+            { keys: ['港', '香港', 'hong kong', 'hk', 'hkd'], code: 'HKD', sym: 'HK$', rate: 4.0, icon: 'HK' },
+            { keys: ['澳', '雪梨', 'australia', 'sydney', 'aud'], code: 'AUD', sym: 'A$', rate: 20.5, icon: 'AU' }
+        ];
+
+        for (let item of mapping) {
+            if (item.keys.some(k => d.includes(k))) return item;
+        }
+        return { code: 'USD', sym: '$', rate: 30, icon: d.substring(0, 3).toUpperCase() || 'TR' };
+      }
+
+      function initApp() {
+        if (!tripSettings) {
+          window.openSettingsModal();
+          return;
+        }
+
+        // 套用主題顏色與自適應文字色
+        document.documentElement.style.setProperty('--primary', tripSettings.themeColor || '#ea9999');
+        document.documentElement.style.setProperty('--primary-content', tripSettings.themeText || '#1a1a1a');
+        if (tripSettings.themeColor === '#ffffff') {
+            document.documentElement.style.setProperty('--primary-border', '#d1d1d1');
+        } else {
+            document.documentElement.style.setProperty('--primary-border', tripSettings.themeColor || '#ea9999');
+        }
+
+        document.getElementById('header-title').textContent = tripSettings.title;
+        document.getElementById('header-dates').textContent = `${tripSettings.startDate.replace(/-/g, '.')} - ${tripSettings.endDate.replace(/-/g, '.')}`;
+        document.getElementById('header-icon').textContent = tripSettings.icon || 'TRIP';
+
+        const start = new Date(tripSettings.startDate);
+        const end = new Date(tripSettings.endDate);
+        const diffTime = Math.abs(end - start);
+        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+
+        const tabContainer = document.getElementById('tab-container');
+        const mainContent = document.getElementById('itinerary-main-content');
+        let tabsHTML = '';
+        let contentHTML = '';
+        tripDays = [];
+
+        const weekdays = ['週日','週一','週二','週三','週四','週五','週六'];
+
+        for(let i=0; i<diffDays; i++) {
+          let d = new Date(start);
+          d.setDate(start.getDate() + i);
+          let dayKey = `day${i+1}`;
+          let dateStr = `${String(d.getMonth()+1).padStart(2,'0')}.${String(d.getDate()).padStart(2,'0')}`;
+          let dayOfWeek = weekdays[d.getDay()];
+
+          tripDays.push({ id: dayKey, date: dateStr, dayOfWeek: dayOfWeek, num: String(i+1).padStart(2,'0') });
+          if(!itinerariesData[dayKey]) itinerariesData[dayKey] = []; 
+
+          tabsHTML += `
+            <div class="day-btn flex-none min-w-[85px] p-3 text-center cursor-pointer border-r border-b border-gray-300 transition-colors ${i===0 ? 'active' : ''}" data-target="${dayKey}" data-idx="${i}">
+              <div class="font-eng text-sm font-bold pointer-events-none">DAY ${i+1}</div>
+              <div class="day-label text-[10px] pointer-events-none transition-opacity">${dayOfWeek}</div>
+              <div class="date-label text-xs mt-1 pointer-events-none transition-opacity">${dateStr}</div>
+            </div>
+          `;
+
+          contentHTML += `
+            <div id="${dayKey}" class="day-content ${i===0 ? 'active' : ''} z-10 relative">
+              <div id="timeline-${dayKey}"></div>
+            </div>
+          `;
+        }
+        
+        tabContainer.innerHTML = tabsHTML;
+        mainContent.innerHTML = contentHTML;
+
+        document.getElementById('exchange-rate').value = tripSettings.rate;
+        document.querySelectorAll('.cur-code-label').forEach(el => el.textContent = tripSettings.curCode.toUpperCase());
+        document.querySelectorAll('.cur-sym-label').forEach(el => el.textContent = tripSettings.curSym);
+
+        const payersContainer = document.getElementById('expense-payers-container');
+        payersContainer.innerHTML = '';
+        tripSettings.participants.forEach((p, index) => {
+          payersContainer.innerHTML += `
+            <label class="flex-1 border border-gray-400 rounded-lg p-2.5 flex items-center justify-center gap-1.5 cursor-pointer hover:bg-gray-300 transition-colors min-w-[70px]">
+              <input type="radio" name="expense-payer" value="${p}" ${index === 0 ? 'checked' : ''} class="accent-primary">
+              <span class="font-bold text-sm truncate">${p}</span>
+            </label>
+          `;
+        });
+
+        currentDay = 'day1';
+        updateSummaryCard(0);
+        
+        // 啟動 Firebase 獨立 TripID 連線
+        subscribeToFirebase(tripSettings.tripId);
+      }
+
+      function updateSummaryCard(idx) {
+        if(tripDays[idx]) {
+          document.getElementById("summary-title").textContent = `DAY ${idx+1} / ${tripDays[idx].date}`;
+          document.getElementById("summary-num").textContent = tripDays[idx].num;
+        }
+      }
+
+      function formatToAMPM(time24) {
+        if(!time24) return { period: '', time: '' };
+        let [h, m] = time24.split(':');
+        h = parseInt(h);
+        const period = h >= 12 ? 'PM' : 'AM';
+        const displayH = h % 12 || 12;
+        return { period, time: `${String(displayH).padStart(2,'0')}:${m}` };
+      }
+
+      // --- 獨立 Firebase 資料庫連線邏輯 ---
+      function subscribeToFirebase(tripId) {
+        if (unsubscribeItineraries) unsubscribeItineraries();
+        if (unsubscribeExpenses) unsubscribeExpenses();
+
+        unsubscribeItineraries = onSnapshot(collection(db, "trips", tripId, "itineraries"), (snapshot) => {
+            for (let key in itinerariesData) itinerariesData[key] = [];
+            snapshot.forEach(docSnap => {
+                const item = docSnap.data();
+                if (!itinerariesData[item.day]) itinerariesData[item.day] = [];
+                itinerariesData[item.day].push(item);
+            });
+            Object.keys(itinerariesData).forEach(day => {
+                itinerariesData[day].sort((a, b) => a.time.localeCompare(b.time));
+            });
+            renderItineraries();
+        }, (error) => console.error("行程同步錯誤：", error));
+
+        unsubscribeExpenses = onSnapshot(collection(db, "trips", tripId, "expenses"), (snapshot) => {
+            expensesData = [];
+            totalSpent = 0;
+            snapshot.forEach(docSnap => expensesData.push(docSnap.data()));
+            expensesData.sort((a, b) => b.id - a.id);
+            totalSpent = expensesData.reduce((sum, item) => sum + (parseFloat(item.amount) || 0), 0);
+            updateExpenseUI();
+        }, (error) => console.error("記帳同步錯誤：", error));
+      }
+
+      function renderItineraries() {
+        tripDays.forEach(dayObj => {
+            const container = document.getElementById(`timeline-${dayObj.id}`);
+            if (!container) return;
+            container.innerHTML = '';
+            
+            const data = itinerariesData[dayObj.id] || [];
+            
+            if (data.length === 0) {
+              container.innerHTML = `
+                <div class="pl-[100px] pr-4 mt-6">
+                  <div class="border-l-2 border-gray-400 pl-4 py-2 text-xs text-gray-500">目前沒有行程，點擊右下角新增。</div>
+                </div>`;
+            } else {
+              data.forEach(item => {
+                const { period, time } = formatToAMPM(item.time);
+                container.innerHTML += `
+                  <div class="flex px-4 mb-8 group animate-[fade-in_0.3s_ease-out]">
+                    <div class="w-[55px] pt-1 text-center">
+                      <div class="text-[10px] font-bold text-gray-500 leading-none mb-0.5">${period}</div>
+                      <div class="font-eng font-bold text-[15px] text-gray-900 leading-none">${time}</div>
+                    </div>
+                    <div class="relative w-10 flex justify-center">
+                      <!-- 圓點自動套用 primary 主題色 -->
+                      <div class="w-4 h-4 bg-primary rounded-full mt-1.5 shadow-[0_0_0_4px_#e2e2e2] z-10 transition-colors duration-300 ${tripSettings.themeColor === '#ffffff' ? 'border border-gray-400' : ''}"></div>
+                    </div>
+                    <div class="flex-1 pb-4 border-b border-gray-300">
+                      <div class="flex justify-between items-start">
+                        <h3 class="text-lg font-bold mb-1 text-gray-800">${item.title}</h3>
+                        <div class="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                          <!-- 編輯按鈕自動套用 primary 主題色 -->
+                          <button onclick="openItineraryModal(${item.id})" class="text-xs text-primary font-bold transition-colors ${tripSettings.themeColor === '#ffffff' ? '!text-gray-700' : ''}">編輯</button>
+                          <button onclick="deleteItinerary(${item.id})" class="text-xs text-red-500 font-bold">刪除</button>
+                        </div>
+                      </div>
+                      ${item.desc ? `<p class="text-xs text-gray-600 mb-1">${item.desc}</p>` : ''}
+                      ${item.warning ? `<p class="text-xs text-red-500 font-bold mt-2"> ${item.warning}</p>` : ''}
+                    </div>
+                  </div>
+                `;
+              });
+              container.innerHTML += `
+                <div class="pl-[100px] pr-4 mt-6">
+                  <div class="border-l-2 border-gray-400 pl-4 py-2 text-xs text-gray-500">目前沒有更多行程，點擊右下角新增。</div>
+                </div>`;
+            }
+        });
+      }
+
+      function updateExpenseUI() {
+        const totalEl = document.getElementById('expense-total');
+        if (totalEl) totalEl.textContent = totalSpent.toLocaleString();
+
+        const listContainer = document.getElementById('expense-list');
+        if (!listContainer) return;
+
+        if (expensesData.length === 0) {
+          listContainer.innerHTML = `
+            <div id="expense-empty" class="border-2 border-dashed border-gray-400 rounded-xl p-8 text-center text-sm text-gray-500">
+              尚未新增任何支出，資料即時同步。
+            </div>`;
+          return;
+        }
+
+        listContainer.innerHTML = '';
+        expensesData.forEach(item => {
+          listContainer.innerHTML += `
+            <div class="bg-[#e2e2e2] p-4 rounded-xl shadow-sm border border-gray-400 flex justify-between items-center group">
+              <div class="flex items-center gap-3">
+                <div>
+                  <h4 class="font-bold text-gray-800">${item.title}</h4>
+                  <div class="flex items-center mt-1">
+                    <span class="text-[10px] px-2 py-0.5 rounded font-bold border border-gray-500 text-gray-600">${item.payer} 的花費</span>
+                  </div>
+                </div>
+              </div>
+              <div class="text-right">
+                <p class="font-eng font-bold text-lg text-gray-900">${tripSettings.curSym} ${item.amount}</p>
+                <button onclick="deleteExpense(${item.id})" class="text-[10px] text-red-500 opacity-0 group-hover:opacity-100 transition-opacity mt-1">刪除</button>
+              </div>
+            </div>
+          `;
+        });
+      }
+
+      // --- 全域按鈕事件 ---
+      window.openModal = function(id) { document.getElementById(id).classList.add('active'); };
+      window.closeModal = function(id) {
+        document.getElementById(id).classList.remove('active');
+        if(id === 'modal-add-expense'){
+          document.getElementById('expense-title').value = '';
+          document.getElementById('expense-amount').value = '';
+        }
+      };
+
+      window.openSettingsModal = function() {
+        const colorContainer = document.getElementById('color-picker-container');
+        const currentTheme = (tripSettings && tripSettings.themeColor) ? tripSettings.themeColor : '#ea9999';
+        
+        colorContainer.innerHTML = THEME_COLORS.map(c => `
+          <label class="cursor-pointer relative">
+            <input type="radio" name="theme-color" value="${c.hex}" data-text="${c.text}" class="peer sr-only" ${c.hex === currentTheme ? 'checked' : ''}>
+            <div class="w-7 h-7 rounded-full border-[3px] ${c.hex === '#ffffff' ? 'border-gray-300' : 'border-transparent'} peer-checked:!border-gray-900 peer-checked:scale-110 transition-transform shadow-md" style="background-color: ${c.hex};"></div>
+          </label>
+        `).join('');
+
+        document.getElementById('set-trip-id').value = tripSettings ? tripSettings.tripId : generateTripId();
+
+        if(tripSettings) {
+          document.getElementById('set-title').value = tripSettings.title || '';
+          document.getElementById('set-dest').value = tripSettings.dest || '';
+          document.getElementById('set-start').value = tripSettings.startDate || '';
+          document.getElementById('set-end').value = tripSettings.endDate || '';
+          document.getElementById('set-cur-code').value = tripSettings.curCode || '';
+          document.getElementById('set-cur-sym').value = tripSettings.curSym || '';
+          document.getElementById('set-rate').value = tripSettings.rate || '';
+          document.getElementById('rate-label-currency').textContent = tripSettings.curCode || '當地貨幣';
+          document.getElementById('set-people').value = tripSettings.participants ? tripSettings.participants.join(',') : 'A,B';
+        } else {
+          document.getElementById('set-people').value = 'A,B';
+        }
+        openModal('modal-settings');
+      };
+
+      window.saveSettings = function() {
+        const tripId = document.getElementById('set-trip-id').value.trim().toUpperCase() || generateTripId();
+        const themeInput = document.querySelector('input[name="theme-color"]:checked');
+        const themeColor = themeInput.value;
+        const themeText = themeInput.getAttribute('data-text');
+        
+        const title = document.getElementById('set-title').value.trim();
+        const dest = document.getElementById('set-dest').value.trim();
+        const start = document.getElementById('set-start').value;
+        const end = document.getElementById('set-end').value;
+        const curCode = document.getElementById('set-cur-code').value.trim();
+        const curSym = document.getElementById('set-cur-sym').value.trim();
+        const rate = parseFloat(document.getElementById('set-rate').value) || 1;
+        const peopleRaw = document.getElementById('set-people').value;
+
+        if(!title || !dest || !start || !end || !peopleRaw) {
+          alert('請填寫完整設定資料'); return;
+        }
+        if(new Date(start) > new Date(end)) {
+          alert('結束日期不能早於開始日期'); return;
+        }
+
+        const icon = getDestinationInfo(dest).icon;
+        const participants = peopleRaw.split(',').map(p => p.trim()).filter(p => p);
+        
+        tripSettings = { tripId, title, dest, startDate: start, endDate: end, curCode, curSym, rate, participants, icon, themeColor, themeText };
+        localStorage.setItem('tripSettings', JSON.stringify(tripSettings));
+
+        closeModal('modal-settings');
+        initApp(); 
+      };
+
+      window.openItineraryModal = function(id = null) {
+        editingItineraryId = id;
+        const modalTitle = document.getElementById('modal-itinerary-title');
+        
+        if (id) {
+          modalTitle.textContent = '編輯行程';
+          const item = (itinerariesData[currentDay] || []).find(i => i.id === id);
+          if (item) {
+            document.getElementById('itinerary-time').value = item.time;
+            document.getElementById('itinerary-title').value = item.title;
+            document.getElementById('itinerary-desc').value = item.desc || '';
+            document.getElementById('itinerary-warning').value = item.warning || '';
+          }
+        } else {
+          modalTitle.textContent = '新增行程';
+          document.getElementById('itinerary-time').value = '10:00';
+          document.getElementById('itinerary-title').value = '';
+          document.getElementById('itinerary-desc').value = '';
+          document.getElementById('itinerary-warning').value = '';
+        }
+        openModal('modal-add-itinerary');
+      };
+
+      window.submitItinerary = async function() {
+        const time = document.getElementById('itinerary-time').value;
+        const title = document.getElementById('itinerary-title').value;
+        const desc = document.getElementById('itinerary-desc').value;
+        const warning = document.getElementById('itinerary-warning').value;
+
+        if(!title) { alert('請輸入行程標題'); return; }
+
+        const id = editingItineraryId ? editingItineraryId : Date.now();
+        const docData = { id, day: currentDay, time, title, desc: desc || '', warning: warning || '' };
+
+        try {
+          await setDoc(doc(db, "trips", tripSettings.tripId, "itineraries", id.toString()), docData);
+          closeModal('modal-add-itinerary');
+        } catch(e) { alert("儲存失敗：" + e.message); }
+      };
+
+      window.deleteItinerary = async function(id) {
+        if(confirm('確定要刪除此行程嗎？')) {
+          try { await deleteDoc(doc(db, "trips", tripSettings.tripId, "itineraries", id.toString())); } 
+          catch(e) { alert("刪除失敗：" + e.message); }
+        }
+      };
+
+      window.submitExpense = async function() {
+        const title = document.getElementById('expense-title').value;
+        const amount = parseFloat(document.getElementById('expense-amount').value);
+        const payerEl = document.querySelector('input[name="expense-payer"]:checked');
+        if(!payerEl) { alert('請選擇記帳人員'); return; }
+
+        if(!title || isNaN(amount) || amount <= 0) { alert('請填寫正確的項目與金額'); return; }
+
+        const id = Date.now();
+        const docData = { id, title, amount, payer: payerEl.value };
+
+        try {
+          await setDoc(doc(db, "trips", tripSettings.tripId, "expenses", id.toString()), docData);
+          closeModal('modal-add-expense');
+        } catch(e) { alert("儲存失敗：" + e.message); }
+      };
+
+      window.deleteExpense = async function(id) {
+        if(confirm('確定要刪除此筆支出嗎？')) {
+          try { await deleteDoc(doc(db, "trips", tripSettings.tripId, "expenses", id.toString())); } 
+          catch(e) { alert("刪除失敗：" + e.message); }
+        }
+      };
+
+      // --- 頁面初始化與互動 ---
+      document.addEventListener("DOMContentLoaded", () => {
+        initApp(); 
+
+        document.getElementById('set-dest').addEventListener('input', (e) => {
+            const info = getDestinationInfo(e.target.value);
+            document.getElementById('set-cur-code').value = info.code;
+            document.getElementById('set-cur-sym').value = info.sym;
+            document.getElementById('set-rate').value = info.rate; 
+            document.getElementById('rate-label-currency').textContent = info.code || '當地貨幣';
+        });
+
+        document.getElementById('itinerary-time').addEventListener('change', (e) => {
+            let val = e.target.value;
+            if(val) {
+                let [h, m] = val.split(':');
+                let min = parseInt(m);
+                let remainder = min % 5;
+                if(remainder !== 0) {
+                    min = Math.round(min / 5) * 5;
+                    if(min === 60) {
+                        min = 0;
+                        h = String(parseInt(h) + 1).padStart(2, '0');
+                        if (h === '24') h = '00';
+                    }
+                    e.target.value = `${h}:${String(min).padStart(2, '0')}`;
+                }
+            }
+        });
+
+        document.getElementById('tab-container').addEventListener('click', (e) => {
+            const btn = e.target.closest('.day-btn');
+            if (!btn) return;
+            
+            currentDay = btn.getAttribute('data-target');
+            const idx = parseInt(btn.getAttribute('data-idx'));
+
+            document.querySelectorAll('.day-btn').forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            document.querySelectorAll('.day-content').forEach(content => {
+                if (content.id === currentDay) content.classList.add('active');
+                else content.classList.remove('active');
+            });
+
+            updateSummaryCard(idx);
+        });
+
+        const navBtns = document.querySelectorAll(".nav-btn");
+        const mainTabs = document.querySelectorAll(".main-tab");
+        navBtns.forEach(btn => {
+          btn.addEventListener("click", () => {
+            const targetId = btn.getAttribute("data-target");
+            
+            navBtns.forEach(b => b.classList.remove("active"));
+            btn.classList.add("active");
+            
+            mainTabs.forEach(tab => {
+              if (tab.id === targetId) tab.classList.add("active");
+              else tab.classList.remove("active");
+            });
+          });
+        });
+
+        const rateInput = document.getElementById('exchange-rate');
+        const foreignInput = document.getElementById('input-foreign');
+        const twdInput = document.getElementById('input-twd');
+
+        const calculateExchange = (source) => {
+          const rate = parseFloat(rateInput.value) || 1;
+          if (source === 'foreign') {
+            const foreignVal = parseFloat(foreignInput.value) || 0;
+            twdInput.value = Math.round(foreignVal * rate);
+          } else if (source === 'twd') {
+            const twdVal = parseFloat(twdInput.value) || 0;
+            foreignInput.value = Math.round(twdVal / rate);
+          } else if (source === 'rate') {
+            if(foreignInput.value) calculateExchange('foreign');
+            if(tripSettings) {
+              tripSettings.rate = rate;
+              localStorage.setItem('tripSettings', JSON.stringify(tripSettings));
+            }
+          }
+        };
+
+        if (foreignInput && twdInput && rateInput) {
+          foreignInput.addEventListener('input', () => calculateExchange('foreign'));
+          twdInput.addEventListener('input', () => calculateExchange('twd'));
+          rateInput.addEventListener('input', () => calculateExchange('rate'));
+        }
+      });
+    </script>
+  </body>
+</html>
